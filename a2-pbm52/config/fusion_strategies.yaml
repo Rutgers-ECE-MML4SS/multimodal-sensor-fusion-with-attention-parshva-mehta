@@ -1,0 +1,46 @@
+# Configuration for comparing fusion strategies
+
+defaults:
+  - base
+
+# Hydra multirun configuration for comparing all fusion strategies
+# Run with: python src/train.py --config-name fusion_strategies --multirun fusion=early,late,hybrid
+
+# Early Fusion Configuration
+early_fusion:
+  model:
+    fusion_type: early
+    hidden_dim: 256
+  experiment:
+    name: a2_early_fusion_${dataset.name}
+
+# Late Fusion Configuration
+late_fusion:
+  model:
+    fusion_type: late
+    hidden_dim: 256
+    # Each modality has separate classifier
+  experiment:
+    name: a2_late_fusion_${dataset.name}
+
+# Hybrid Fusion Configuration (Main focus)
+hybrid_fusion:
+  model:
+    fusion_type: hybrid
+    hidden_dim: 256
+    num_heads: 4
+  experiment:
+    name: a2_hybrid_fusion_${dataset.name}
+
+# Uncertainty-Aware Fusion (Extra credit)
+uncertainty_fusion:
+  model:
+    fusion_type: uncertainty
+    hidden_dim: 256
+    num_heads: 4
+  uncertainty:
+    method: dropout
+    num_mc_samples: 10
+  experiment:
+    name: a2_uncertainty_fusion_${dataset.name}
+

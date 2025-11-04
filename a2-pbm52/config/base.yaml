@@ -1,0 +1,87 @@
+# Base configuration for A2 Multimodal Sensor Fusion
+# This file defines all hyperparameters and paths for reproducible experiments.
+# Edit this file rather than hardcoding values in your Python scripts.
+
+# Dataset configuration
+dataset:
+  name: pamap2  # Options: pamap2 (recommended), mhad, cooking
+  data_dir: ./data  # Where to store/load dataset
+  modalities: [imu_hand, imu_chest, imu_ankle, heart_rate]  # For pamap2
+                                                              # For mhad: [video, imu]
+                                                              # For cooking: [video, audio]
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  batch_size: 32  # Adjust for your RAM (16-64 typical for CPU)
+  num_workers: 4  # Parallel data loading (0-4 for CPU)
+
+# Model configuration
+model:
+  fusion_type: hybrid  # Options: early, late, hybrid, uncertainty
+  hidden_dim: 256
+  output_dim: 128  # Encoder output dimension
+  num_heads: 4  # For attention mechanisms
+  dropout: 0.1
+  
+  # Encoder configurations per modality
+  encoders:
+    video:
+      type: frame  # frame, sequence, or mlp
+      input_dim: 512  # ResNet features
+      temporal_pooling: attention
+    imu:
+      type: sequence  # frame, sequence, or mlp
+      input_dim: 64  # 6-axis IMU (3 accel + 3 gyro) * statistical features
+      encoder_type: lstm  # For SequenceEncoder: lstm, gru, cnn
+      num_layers: 2
+
+# Training configuration
+training:
+  max_epochs: 100
+  learning_rate: 1e-3
+  weight_decay: 1e-4
+  optimizer: adamw
+  scheduler: cosine
+  warmup_epochs: 5
+  gradient_clip_norm: 1.0
+  early_stopping_patience: 10
+  
+  # Data augmentation
+  augmentation:
+    temporal_jitter: 0.1  # ±10% sequence length
+    gaussian_noise: 0.05  # σ=0.05
+    modality_dropout: 0.1  # 10% probability during training
+
+# Evaluation configuration
+evaluation:
+  metrics: [accuracy, f1_macro, ece, nll]
+  missing_modality_test: true
+  uncertainty_analysis: true
+  num_calibration_bins: 15
+
+# Uncertainty configuration
+uncertainty:
+  method: dropout  # Options: dropout, ensemble, learned
+  num_mc_samples: 10  # For MC dropout
+  temperature_scaling: true  # Post-hoc calibration
+
+# Experiment tracking
+experiment:
+  name: a2_${model.fusion_type}_${dataset.name}
+  save_dir: ./runs  # Model checkpoints saved here
+  log_every_n_steps: 50
+  save_top_k: 3  # Keep top 3 checkpoints
+
+# Output paths for grading (DO NOT CHANGE)
+outputs:
+  experiments_dir: ./experiments  # JSON results go here
+  analysis_dir: ./analysis        # Plots go here
+  report_path: ./report.pdf       # Final report location
+
+# Reproducibility (DO NOT CHANGE for grading)
+seed: 42  # Fixed seed ensures reproducible results
+
+# Compute
+device: cpu  # Will auto-detect GPU if available, but CPU is required baseline
+mixed_precision: false  # Set true if using GPU with FP16 support
+
