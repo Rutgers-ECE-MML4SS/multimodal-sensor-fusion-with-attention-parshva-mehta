@@ -83,3 +83,4 @@ multirun/
 # Keep directory structure but not contents
 # (except for .gitkeep files)
 
+*.ckpt
