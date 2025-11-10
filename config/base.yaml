@@ -5,7 +5,7 @@
 # Dataset configuration
 dataset:
   name: pamap2  # Options: pamap2 (recommended), mhad, cooking
-  data_dir: ./data  # Where to store/load dataset
+  data_dir: ../data  # Where to store/load dataset
   modalities: [imu_hand, imu_chest, imu_ankle, heart_rate]  # For pamap2
                                                               # For mhad: [video, imu]
                                                               # For cooking: [video, audio]
@@ -14,28 +14,53 @@ dataset:
   test_split: 0.15
   batch_size: 32  # Adjust for your RAM (16-64 typical for CPU)
   num_workers: 4  # Parallel data loading (0-4 for CPU)
+  num_classes: 13
 
 # Model configuration
 model:
-  fusion_type: hybrid  # Options: early, late, hybrid, uncertainty
+  fusion_type: uncertainty  # Options: early, late, hybrid, uncertainty
   hidden_dim: 256
   output_dim: 128  # Encoder output dimension
   num_heads: 4  # For attention mechanisms
   dropout: 0.1
-  
-  # Encoder configurations per modality
-  encoders:
-    video:
-      type: frame  # frame, sequence, or mlp
-      input_dim: 512  # ResNet features
-      temporal_pooling: attention
-    imu:
-      type: sequence  # frame, sequence, or mlp
-      input_dim: 64  # 6-axis IMU (3 accel + 3 gyro) * statistical features
-      encoder_type: lstm  # For SequenceEncoder: lstm, gru, cnn
-      num_layers: 2
 
-# Training configuration
+  # Encoder configurations per modality
+  # encoders:
+  #   video:
+  #     type: frame  # frame, sequence, or mlp
+  #     input_dim: 512  # ResNet features
+  #     temporal_pooling: attention
+  #   imu:
+  #     type: sequence  # frame, sequence, or mlp
+  #     input_dim: 64  # 6-axis IMU (3 accel + 3 gyro) * statistical features
+  #     encoder_type: lstm  # For SequenceEncoder: lstm, gru, cnn
+  #     num_layers: 2
+
+  encoders:
+    # Remove the video block for pamap2
+    # Define each PAMAP2 modality explicitly
+    imu_hand:
+      type: sequence
+      input_dim: 64
+      encoder_type: lstm
+      num_layers: 2
+    imu_chest:
+      type: sequence
+      input_dim: 64
+      encoder_type: lstm
+      num_layers: 2
+    imu_ankle:
+      type: sequence
+      input_dim: 64
+      encoder_type: lstm
+      num_layers: 2
+    heart_rate:
+      type: mlp          # simple MLP is fine for 1-D HR
+      input_dim: 1       # <-- fixes the 1 vs 64 matmul mismatch
+      num_layers: 2
+      dropout: 0.1
+      batch_norm: true
+
 training:
   max_epochs: 100
   learning_rate: 1e-3
@@ -51,6 +76,7 @@ training:
     temporal_jitter: 0.1  # ±10% sequence length
     gaussian_noise: 0.05  # σ=0.05
     modality_dropout: 0.1  # 10% probability during training
+
 
 # Evaluation configuration
 evaluation:
@@ -75,8 +101,9 @@ experiment:
 # Output paths for grading (DO NOT CHANGE)
 outputs:
   experiments_dir: ./experiments  # JSON results go here
-  analysis_dir: ./analysis        # Plots go here
+  analysis_dir: ./analysis       # Plots go here
   report_path: ./report.pdf       # Final report location
+
 
 # Reproducibility (DO NOT CHANGE for grading)
 seed: 42  # Fixed seed ensures reproducible results

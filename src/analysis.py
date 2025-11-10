@@ -15,7 +15,8 @@ import json
 from pathlib import Path
 import argparse
 from typing import Dict, List
-
+from attention import visualize_attention
+import torch
 
 plt.style.use('seaborn-v0_8-darkgrid')
 sns.set_palette("husl")
@@ -335,16 +336,35 @@ def generate_all_plots(experiment_dir: str, output_dir: str):
     print("  - plot_calibration_diagram(confidences, predictions, labels)")
 
 
+
 def main():
     parser = argparse.ArgumentParser(description='Generate analysis plots')
     parser.add_argument('--experiment_dir', type=str, default='experiments',
                        help='Directory with experiment JSON files')
     parser.add_argument('--output_dir', type=str, default='analysis',
                        help='Directory to save plots')
-    
+    parser.add_argument('--attn_npy', type=str, default=None)
+    parser.add_argument('--mods', nargs='+', default=None)
+    parser.add_argument('--attn_out', type=str, default=None)
+        
     args = parser.parse_args()
     
-    generate_all_plots(args.experiment_dir, args.output_dir)
+    if args.attn_npy:
+        if args.mods is None:
+            # read modality names from file next to the npy
+            mods_file = Path(args.attn_npy).with_name("modalities.txt")
+            mods = [ln.strip() for ln in open(mods_file) if ln.strip()]
+        else:
+            mods = args.mods
+        att = np.load(args.attn_npy)                          # (M,M) after averaging
+        out_path = Path(args.attn_out) if args.attn_out else Path(args.output_dir) / "attn.png"
+        visualize_attention(torch.from_numpy(att), mods, save_path=str(out_path))
+        print(f"Saved attention heatmap → {out_path}")
+        
+        generate_all_plots(args.experiment_dir, args.output_dir)
+        
+        plot_attention_weights(attention_matrix, modality_names)
+        plot_calibration_diagram(confidences, predictions, labels)
 
 
 if __name__ == '__main__':

@@ -1,44 +1,44 @@
 # Dataset-specific configurations
 
-# MHAD (Multimodal Human Action Detection)
-mhad:
-  name: mhad
-  data_dir: ./data/mhad
-  modalities: [video, imu]
-  num_classes: 11
-  sampling_rates:
-    video: 30  # fps
-    imu: 50    # Hz
+# # MHAD (Multimodal Human Action Detection)
+# mhad:
+#   name: mhad
+#   data_dir: ./data/mhad
+#   modalities: [video, imu]
+#   num_classes: 11
+#   sampling_rates:
+#     video: 30  # fps
+#     imu: 50    # Hz
   
-  encoders:
-    video:
-      input_dim: 512  # Pre-extracted ResNet features
-      type: frame
-      temporal_pooling: attention
-    imu:
-      input_dim: 64  # 6-axis * statistical features
-      type: sequence
-      encoder_type: lstm
+#   encoders:
+#     video:
+#       input_dim: 512  # Pre-extracted ResNet features
+#       type: frame
+#       temporal_pooling: attention
+#     imu:
+#       input_dim: 64  # 6-axis * statistical features
+#       type: sequence
+#       encoder_type: lstm
 
-# MPI Cooking 2 Dataset
-cooking:
-  name: cooking
-  data_dir: ./data/cooking
-  modalities: [video, audio]
-  num_classes: 13
-  sampling_rates:
-    video: 30   # fps
-    audio: 48000  # Hz (but using pre-extracted MFCC)
+# # MPI Cooking 2 Dataset
+# cooking:
+#   name: cooking
+#   data_dir: ./data/cooking
+#   modalities: [video, audio]
+#   num_classes: 13
+#   sampling_rates:
+#     video: 30   # fps
+#     audio: 48000  # Hz (but using pre-extracted MFCC)
   
-  encoders:
-    video:
-      input_dim: 1024  # I3D features
-      type: frame
-      temporal_pooling: attention
-    audio:
-      input_dim: 128  # MFCC features
-      type: sequence
-      encoder_type: cnn
+#   encoders:
+#     video:
+#       input_dim: 1024  # I3D features
+#       type: frame
+#       temporal_pooling: attention
+#     audio:
+#       input_dim: 128  # MFCC features
+#       type: sequence
+#       encoder_type: cnn
 
 # PAMAP2 Physical Activity Monitoring
 pamap2:
@@ -71,31 +71,31 @@ pamap2:
       encoder_type: lstm
 
 # Synthetic Dataset (for quick testing)
-synthetic:
-  name: synthetic
-  data_dir: ./data/synthetic
-  modalities: [sensor1, sensor2, sensor3]
-  num_classes: 5
-  num_samples: 10000
-  sequence_length: 100
+# synthetic:
+#   name: synthetic
+#   data_dir: ./data/synthetic
+#   modalities: [sensor1, sensor2, sensor3]
+#   num_classes: 5
+#   num_samples: 10000
+#   sequence_length: 100
   
-  # Generated with controllable characteristics
-  sampling_rates:
-    sensor1: 10   # Hz
-    sensor2: 50   # Hz
-    sensor3: 100  # Hz
+#   # Generated with controllable characteristics
+#   sampling_rates:
+#     sensor1: 10   # Hz
+#     sensor2: 50   # Hz
+#     sensor3: 100  # Hz
   
-  encoders:
-    sensor1:
-      input_dim: 32
-      type: sequence
-      encoder_type: lstm
-    sensor2:
-      input_dim: 32
-      type: sequence
-      encoder_type: lstm
-    sensor3:
-      input_dim: 32
-      type: sequence
-      encoder_type: lstm
+#   encoders:
+#     sensor1:
+#       input_dim: 32
+#       type: sequence
+#       encoder_type: lstm
+#     sensor2:
+#       input_dim: 32
+#       type: sequence
+#       encoder_type: lstm
+#     sensor3:
+#       input_dim: 32
+#       type: sequence
+#       encoder_type: lstm
 

@@ -15,11 +15,13 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 import json
+import shutil 
+
 
 from data import create_dataloaders
 from fusion import build_fusion_model
 from encoders import build_encoder
-
+from uncertainty import compute_calibration_metrics, CalibrationMetrics
 
 class MultimodalFusionModule(pl.LightningModule):
     """
@@ -223,6 +225,58 @@ class MultimodalFusionModule(pl.LightningModule):
             return optimizer
 
 
+def _collect_logits_labels(model, dataloader, device: str):
+    """One full pass to collect logits and labels (works with dict+mask batches)."""
+    model.eval().to(device)
+    all_logits, all_labels = [], []
+    with torch.no_grad():
+        for batch in dataloader:
+            if len(batch) == 2:
+                inputs, labels = batch
+                mask = None
+            elif len(batch) == 3:
+                inputs, labels, mask = batch
+            else:
+                raise ValueError(f"Unexpected batch len={len(batch)}")
+
+            labels = labels.to(device)
+            if isinstance(inputs, dict):
+                inputs = {k: v.to(device) for k, v in inputs.items()}
+                mask = mask.to(device) if mask is not None else None
+                out = model(inputs, mask)
+            else:
+                out = model(inputs.to(device))
+
+            logits = out[0] if isinstance(out, (tuple, list)) else out
+            all_logits.append(logits.detach().cpu())
+            all_labels.append(labels.detach().cpu())
+
+    if not all_logits:
+        return torch.zeros(0, 1), torch.zeros(0, dtype=torch.long)
+    return torch.cat(all_logits, dim=0), torch.cat(all_labels, dim=0)
+
+def _per_bin_accuracy(confs: torch.Tensor, preds: torch.Tensor, labels: torch.Tensor, num_bins: int):
+    """
+    Return bin EDGES (upper edges: 0.1..1.0 for 10 bins) and accuracy per bin (None if empty).
+    Matches your screenshot format.
+    """
+    edges = torch.linspace(0.0, 1.0, steps=num_bins + 1)
+    idx = torch.bucketize(confs.clamp(0, 1), edges, right=False) - 1
+    idx = idx.clamp(0, num_bins - 1)
+
+    bins_out = [round(float(edges[i + 1].item()), 2) for i in range(num_bins)]  # 0.1..1.0
+    acc_out = []
+    correct = (preds == labels)
+
+    for b in range(num_bins):
+        mask = (idx == b)
+        if mask.any():
+            acc_out.append(round(float(correct[mask].float().mean().item()), 4))
+        else:
+            acc_out.append(None)  
+    return bins_out, acc_out
+
+
 @hydra.main(version_base=None, config_path="../config", config_name="base")
 def main(config: DictConfig):
     """
@@ -294,7 +348,7 @@ def main(config: DictConfig):
     # Trainer
     trainer = pl.Trainer(
         max_epochs=config.training.max_epochs,
-        accelerator='auto',
+        accelerator='cpu',
         devices=1,
         logger=logger,
         callbacks=[checkpoint_callback, early_stopping],
@@ -307,28 +361,80 @@ def main(config: DictConfig):
     # Train
     print("\nStarting training...")
     trainer.fit(model, train_loader, val_loader)
-    
-    # Test on best model
+
+        
+    def _is_uncertainty_fusion(cfg) -> bool:
+        ft = (cfg.model.fusion_type or "").lower()
+        return ft in {"uncertainty", "uwf", "uncertainty_weighted", "uncertainty_weighted_late"}
+
     print("\nTesting best model...")
     best_model_path = checkpoint_callback.best_model_path
     print(f"Loading best model from: {best_model_path}")
-    
     trainer.test(model, test_loader, ckpt_path=best_model_path)
-    
-    # Save final results
-    results = {
-        'best_model_path': str(best_model_path),
-        'best_val_loss': float(checkpoint_callback.best_model_score),
-        'config': OmegaConf.to_container(config, resolve=True)
-    }
-    
-    results_file = save_dir / 'results.json'
-    with open(results_file, 'w') as f:
-        json.dump(results, f, indent=2)
-    
-    print(f"\nTraining complete! Results saved to: {results_file}")
-    print(f"Best model: {best_model_path}")
-    print(f"Best validation loss: {checkpoint_callback.best_model_score:.4f}")
+
+    if _is_uncertainty_fusion(config):
+        print("\nComputing calibration metrics (uncertainty fusion detected)...")
+        best_model = MultimodalFusionModule.load_from_checkpoint(best_model_path, config=config, strict=False)
+        device_str = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+
+        logits_all, labels_all = _collect_logits_labels(best_model, test_loader, device=device_str)
+        if logits_all.numel() == 0:
+            print("No logits collected; skipping uncertainty.json.")
+        else:
+            nll = CalibrationMetrics.negative_log_likelihood(logits_all, labels_all)
+            probs_all = torch.softmax(logits_all, dim=1)
+            confs_all, preds_all = torch.max(probs_all, dim=1)
+            ece = CalibrationMetrics.expected_calibration_error(confs_all, preds_all, labels_all,
+                                                                num_bins=config.evaluation.get('num_calibration_bins', 15))
+
+            bins_list, acc_per_bin = _per_bin_accuracy(
+                confs_all, preds_all, labels_all, num_bins=config.evaluation.get('num_calibration_bins', 15)
+            )
+
+            CalibrationMetrics.reliability_diagram(
+                confs_all.numpy(),
+                preds_all.numpy(),
+                labels_all.numpy(),
+                save_path='./analysis/calibration_diagram.png'
+            )
+            print("✓ Reliability diagram created")
+            
+            experiments_dir = Path(config.outputs.get("experiments_dir", "./experiments"))
+            experiments_dir.mkdir(parents=True, exist_ok=True)
+            out_path = experiments_dir / "uncertainty.json"
+
+            out_obj = {
+                "dataset": str(config.dataset.name),
+                "calibration_metrics": {
+                    "ece": round(float(ece), 3),
+                    "nll": round(float(nll), 3),
+                    "bins": bins_list,                 
+                    "accuracy_per_bin": acc_per_bin, 
+                }
+            }
+            with open(out_path, "w") as f:
+                json.dump(out_obj, f, indent=2)
+            print(f"Saved uncertainty report to: {out_path}")
+    else:
+        print("\nSkipping calibration metrics: fusion_type is not an uncertainty variant.")
+        # Save final results
+        results = {
+            'best_model_path': str(best_model_path),
+            'best_val_loss': float(checkpoint_callback.best_model_score),
+            'config': OmegaConf.to_container(config, resolve=True)
+        }
+        best_ckpt_target = save_dir / "best.ckpt"
+        if best_model_path and Path(best_model_path).exists():
+            shutil.copy(str(best_model_path), str(best_ckpt_target))
+            print(f"Copied best checkpoint to: {best_ckpt_target}")
+
+        results_file = save_dir / 'results.json'
+        with open(results_file, 'w') as f:
+            json.dump(results, f, indent=2)
+
+        print(f"\nTraining complete! Results saved to: {results_file}")
+        print(f"Best model: {best_model_path}")
+        print(f"Best validation loss: {checkpoint_callback.best_model_score:.4f}")
 
 
 if __name__ == '__main__':

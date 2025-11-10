@@ -1,0 +1,81 @@
+config:
+  dataset:
+    name: pamap2
+    data_dir: ../data
+    modalities:
+    - imu_hand
+    - imu_chest
+    - imu_ankle
+    - heart_rate
+    train_split: 0.7
+    val_split: 0.15
+    test_split: 0.15
+    batch_size: 32
+    num_workers: 4
+    num_classes: 13
+  model:
+    fusion_type: hybrid
+    hidden_dim: 256
+    output_dim: 128
+    num_heads: 1
+    dropout: 0.1
+    encoders:
+      imu_hand:
+        type: sequence
+        input_dim: 64
+        encoder_type: lstm
+        num_layers: 2
+      imu_chest:
+        type: sequence
+        input_dim: 64
+        encoder_type: lstm
+        num_layers: 2
+      imu_ankle:
+        type: sequence
+        input_dim: 64
+        encoder_type: lstm
+        num_layers: 2
+      heart_rate:
+        type: mlp
+        input_dim: 1
+        num_layers: 2
+        dropout: 0.1
+        batch_norm: true
+  training:
+    max_epochs: 100
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    optimizer: adamw
+    scheduler: cosine
+    warmup_epochs: 5
+    gradient_clip_norm: 1.0
+    early_stopping_patience: 10
+    augmentation:
+      temporal_jitter: 0.1
+      gaussian_noise: 0.05
+      modality_dropout: 0.1
+  evaluation:
+    metrics:
+    - accuracy
+    - f1_macro
+    - ece
+    - nll
+    missing_modality_test: true
+    uncertainty_analysis: true
+    num_calibration_bins: 15
+  uncertainty:
+    method: dropout
+    num_mc_samples: 10
+    temperature_scaling: true
+  experiment:
+    name: ablation_early
+    save_dir: ./runs/ablation
+    log_every_n_steps: 50
+    save_top_k: 3
+  outputs:
+    experiments_dir: ./experiments/ablation
+    analysis_dir: ./analysis/ablation
+    report_path: ./report.pdf
+  seed: 42
+  device: cpu
+  mixed_precision: false

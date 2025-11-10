@@ -1,0 +1,8 @@
+{
+  "dataset": "pamap2",
+  "fusion_type": "hybrid",
+  "test_accuracy": 0.8997696042060852,
+  "test_f1_macro": 0.9068277372887402,
+  "test_loss": 0.35186527371406556,
+  "ece": 0.028902083085978636
+}
