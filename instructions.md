@@ -8,8 +8,8 @@ Repository setup:
 
 Dataset Setup: 
 1) Download dataset
-2) Create dir = "data/pamap2"
-3) Select the subjectxxx.dat from protocol
+2) Create dir = "data/pamap2" (make sure it is one directory above "./multimodal-sensor-fusion-with-attention-parshva-mehta")
+3) Select the subjectxxx.dat from protocol and drag them into this directory
 4) Run dataset_preprocessing.py to get train/val/test splits
 
 Training setup: 
@@ -28,7 +28,8 @@ Testing/Analysis:
         --experiment_dir experiments \
         --output_dir analysis \
 
-3) To get attention matrix, run val_attention.py
+3) To get attention matrix
+    - Run val_attention.py
     - this will get the attention matrix from the best training log and output attn.png
         python src/analysis.py \                                                                                                      
         --experiment_dir experiments \
